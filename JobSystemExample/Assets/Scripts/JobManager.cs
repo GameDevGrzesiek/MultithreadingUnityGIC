@@ -13,7 +13,29 @@ public class JobManager : Singleton<JobManager>
     private NativeArray<MobState> na_mobStates;
 
     JobHandle movementJH;
-       
+
+    struct SetupRaycastJob : IJobParallelForTransform
+    {
+        [ReadOnly]
+        public int layerMask;
+
+        [ReadOnly]
+        public Vector3 wallPos;
+
+        [ReadOnly]
+        public NativeList<Vector3> targetPos;
+
+        [WriteOnly]
+        public NativeArray<RaycastCommand> rayCommands;
+
+        public void Execute(int index, TransformAccess transform)
+        {
+            Vector3 shootTarget = new Vector3(targetPos[index].x, wallPos.y, targetPos[index].z);
+            Vector3 dir = shootTarget - transform.position;
+            rayCommands[index] = new RaycastCommand(transform.position, dir, SettingsManager.ShootingRange, layerMask);
+        }
+    }
+
     struct MobMovementJob : IJobParallelForTransform
     {
         [ReadOnly]
@@ -25,31 +47,37 @@ public class JobManager : Singleton<JobManager>
         [ReadOnly]
         public NativeList<Vector3> targetPos;
 
+        [ReadOnly]
+        public NativeArray<RaycastHit> hits;
+
         public NativeArray<MobState> mobStates;
 
         public void Execute(int index, TransformAccess transform)
         {
             Vector3 curPos = transform.position;
 
+            if (mobStates[index] == MobState.ToTarget && hits[index].normal != Vector3.zero)
+                mobStates[index] = MobState.Throw;
+
             switch (mobStates[index])
             {
                 case MobState.ToTarget:
-                {
-                    curPos = Vector3.MoveTowards(curPos, targetPos[index], deltaTime);
+                    {
+                        curPos = Vector3.MoveTowards(curPos, targetPos[index], deltaTime);
 
-                    if (Vector3.Distance(curPos, targetPos[index]) < 2.0f)
-                        mobStates[index] = MobState.FromTarget;
-                }
-                break;
+                        if (Vector3.Distance(curPos, targetPos[index]) < 2.0f)
+                            mobStates[index] = MobState.FromTarget;
+                    }
+                    break;
 
                 case MobState.FromTarget:
-                {
-                    curPos = Vector3.MoveTowards(curPos, startPos[index], deltaTime);
+                    {
+                        curPos = Vector3.MoveTowards(curPos, startPos[index], deltaTime);
 
-                    if (Vector3.Distance(curPos, startPos[index]) < 2.0f)
-                         mobStates[index] = MobState.ToTarget;
-                }
-                break;
+                        if (Vector3.Distance(curPos, startPos[index]) < 2.0f)
+                            mobStates[index] = MobState.ToTarget;
+                    }
+                    break;
             };
 
             transform.position = curPos;
@@ -66,52 +94,55 @@ public class JobManager : Singleton<JobManager>
         na_mobStates.Dispose();
     }
 
-    void Update()
+    private void Update()
     {
-        if (!taa_mobs.isCreated || taa_mobs.length == 0 || 
-            nl_startPos.Length != taa_mobs.length || 
-            nl_targetPos.Length != taa_mobs.length || 
-            na_mobStates.Length != taa_mobs.length)
+        if (!taa_mobs.isCreated || taa_mobs.length == 0 ||
+                nl_startPos.Length != taa_mobs.length ||
+                nl_targetPos.Length != taa_mobs.length ||
+                na_mobStates.Length != taa_mobs.length)
             return;
 
-        NativeArray<RaycastCommand> rayCommands = new NativeArray<RaycastCommand>(taa_mobs.length, Allocator.TempJob);
-        NativeArray<RaycastHit> rayHits = new NativeArray<RaycastHit>(taa_mobs.length, Allocator.TempJob);
+        NativeArray<RaycastCommand> na_rayCommands = new NativeArray<RaycastCommand>(taa_mobs.length, Allocator.TempJob);
+        NativeArray<RaycastHit> na_rayHits = new NativeArray<RaycastHit>(taa_mobs.length, Allocator.TempJob);
 
-        for (int i = 0; i < taa_mobs.length; ++i)
+        var setupRaycastJob = new SetupRaycastJob
         {
-            Vector3 shootTarget = new Vector3(nl_targetPos[i].x, GameManager.instance.Target.transform.position.y, nl_targetPos[i].z);
-            Vector3 dir = shootTarget - taa_mobs[i].position;
-            rayCommands[i] = new RaycastCommand(taa_mobs[i].position, dir, SettingsManager.ShootingRange, 1 << LayerMask.NameToLayer("Wall"));
-        }
+            layerMask = 1 << LayerMask.NameToLayer("Wall"),
+            rayCommands = na_rayCommands,
+            targetPos = nl_targetPos,
+            wallPos = GameManager.instance.Target.transform.position
+        };
 
-        JobHandle castJH = RaycastCommand.ScheduleBatch(rayCommands, rayHits, 100, movementJH);
+        var setupJH = setupRaycastJob.Schedule(taa_mobs);
+        var raycastJH = RaycastCommand.ScheduleBatch(na_rayCommands, na_rayHits, 32, setupJH);
 
-        castJH.Complete();
-
-        for (int i = 0; i < rayHits.Length; ++i)
+        var mobMovementJob = new MobMovementJob
         {
-            if (rayHits[i].collider && na_mobStates[i] == MobState.ToTarget)
+            deltaTime = Time.deltaTime,
+            hits = na_rayHits,
+            mobStates = na_mobStates,
+            startPos = nl_startPos,
+            targetPos = nl_targetPos
+        };
+
+        movementJH = mobMovementJob.Schedule(taa_mobs, raycastJH);
+
+        movementJH.Complete();
+
+        for (int i = 0; i < na_mobStates.Length; ++i)
+        {
+            if (na_mobStates[i] == MobState.Throw)
             {
                 SpearBehavior spear = PoolManager.instance.SpearPool.SpawnObject(taa_mobs[i].position + SettingsManager.ThrowingPoint,
-                                                                                 Quaternion.Euler(SettingsManager.ThrowingRotation)) as SpearBehavior;
+                                                                                     Quaternion.Euler(SettingsManager.ThrowingRotation)) as SpearBehavior;
 
                 spear.Throw();
                 na_mobStates[i] = MobState.FromTarget;
             }
         }
 
-        rayCommands.Dispose();
-        rayHits.Dispose();
-
-        var movementJob = new MobMovementJob
-        {
-            deltaTime = Time.deltaTime,
-            mobStates = na_mobStates,
-            startPos = nl_startPos,
-            targetPos = nl_targetPos
-        };
-
-        movementJH = movementJob.Schedule(taa_mobs, castJH);
+        na_rayCommands.Dispose();
+        na_rayHits.Dispose();
     }
 
     internal void AddMobsToSystem(int mobCnt)
@@ -158,8 +189,8 @@ public class JobManager : Singleton<JobManager>
         for (int i = oldMobCnt; i < na_mobStates.Length; ++i)
             na_mobStates[i] = MobState.ToTarget;
 
-        if (PoolManager.instance.SpearPool.m_cnt < PoolManager.instance.MobPool.m_cnt * 4)
-            AddSpearsToSystem(mobCnt * 4);
+        if (PoolManager.instance.SpearPool.m_cnt < PoolManager.instance.MobPool.m_cnt * 3)
+            AddSpearsToSystem(mobCnt * 3);
     }
 
     internal void RemoveMobsFromSystem(int mobCnt)
@@ -196,7 +227,7 @@ public class JobManager : Singleton<JobManager>
 
         PoolManager.instance.MobPool.Expand(-mobCnt);
 
-        RemoveSpearsFromSystem(mobCnt * 4);
+        RemoveSpearsFromSystem(mobCnt * 3);
     }
 
     internal void AddSpearsToSystem(int spearCnt)
