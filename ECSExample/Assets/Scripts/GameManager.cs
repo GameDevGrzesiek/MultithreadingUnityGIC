@@ -5,11 +5,7 @@ public class GameManager : Singleton<GameManager>
     public readonly Vector3 m_defaultSpawnPos = new Vector3(0, 1, 0);
     public TargetComponent Target;
 
-    void Start()
-    {
-        if (PoolManager.instance.MobPool.m_cnt > 0)
-            JobManager.instance.AddMobsToSystem(PoolManager.instance.MobPool.m_cnt);
-    }
+    void Start() {}
 
     void Update()
     {

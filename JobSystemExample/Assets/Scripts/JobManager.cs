@@ -11,6 +11,8 @@ public class JobManager : Singleton<JobManager>
     private NativeList<Vector3> nl_startPos;
     private NativeList<Vector3> nl_targetPos;
     private NativeArray<MobState> na_mobStates;
+    private NativeArray<RaycastCommand> na_rayCommands;
+    private NativeArray<RaycastHit> na_rayHits;
 
     JobHandle movementJH;
 
@@ -92,6 +94,8 @@ public class JobManager : Singleton<JobManager>
         nl_startPos.Dispose();
         nl_targetPos.Dispose();
         na_mobStates.Dispose();
+        na_rayCommands.Dispose();
+        na_rayHits.Dispose();
     }
 
     private void Update()
@@ -102,8 +106,19 @@ public class JobManager : Singleton<JobManager>
                 na_mobStates.Length != taa_mobs.length)
             return;
 
-        NativeArray<RaycastCommand> na_rayCommands = new NativeArray<RaycastCommand>(taa_mobs.length, Allocator.TempJob);
-        NativeArray<RaycastHit> na_rayHits = new NativeArray<RaycastHit>(taa_mobs.length, Allocator.TempJob);
+        if (!na_rayCommands.IsCreated || na_rayCommands.Length != taa_mobs.length)
+        {
+            movementJH.Complete();
+
+            if (na_rayCommands.IsCreated)
+                na_rayCommands.Dispose();
+
+            if (na_rayHits.IsCreated)
+                na_rayHits.Dispose();
+
+            na_rayCommands = new NativeArray<RaycastCommand>(taa_mobs.length, Allocator.Persistent);
+            na_rayHits = new NativeArray<RaycastHit>(taa_mobs.length, Allocator.Persistent);
+        }
 
         var setupRaycastJob = new SetupRaycastJob
         {
@@ -114,7 +129,7 @@ public class JobManager : Singleton<JobManager>
         };
 
         var setupJH = setupRaycastJob.Schedule(taa_mobs);
-        var raycastJH = RaycastCommand.ScheduleBatch(na_rayCommands, na_rayHits, 32, setupJH);
+        var raycastJH = RaycastCommand.ScheduleBatch(na_rayCommands, na_rayHits, 100, setupJH);
 
         var mobMovementJob = new MobMovementJob
         {
@@ -140,9 +155,6 @@ public class JobManager : Singleton<JobManager>
                 na_mobStates[i] = MobState.FromTarget;
             }
         }
-
-        na_rayCommands.Dispose();
-        na_rayHits.Dispose();
     }
 
     internal void AddMobsToSystem(int mobCnt)

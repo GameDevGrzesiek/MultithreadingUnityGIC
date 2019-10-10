@@ -63,14 +63,12 @@ public class UIManager : Singleton<UIManager>
         if (!MobCountLabel)
             return;
 
-        MobCountLabel.text = "Mob Count: " + PoolManager.instance.MobPool.m_cnt.ToString();
+        MobCountLabel.text = "Mob Count: " + ECSManager.Instance.MobCnt.ToString();
     }
 
     public void ChangeMobCnt(int changeAmount)
     {
-        if (changeAmount > 0)
-            JobManager.instance.AddMobsToSystem(changeAmount);
-        else
-            JobManager.instance.RemoveMobsFromSystem(Math.Abs(changeAmount));
+        ECSManager.instance.MobCnt += changeAmount;
+        RefreshPoolCount();
     }
 }

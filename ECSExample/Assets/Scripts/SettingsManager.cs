@@ -9,8 +9,8 @@ public enum MobState
 
 public static class SettingsManager
 {
-    public static float TargetSpeed = 60.0f;
-    public static float ShootingRange = 50.0f;
-    public static Vector3 ThrowingPoint = new Vector3(0.8f, 0.8f, 0);
-    public static Vector3 ThrowingRotation = new Vector3(-45f, 0, 0);
+    public static readonly float TargetSpeed = 100.0f;
+    public static readonly float ShootingRange = 50.0f;
+    public static readonly Vector3 ThrowingPoint = new Vector3(0.8f, 0.8f, 0);
+    public static readonly Vector3 ThrowingRotation = new Vector3(-45f, 0, 0);
 }
