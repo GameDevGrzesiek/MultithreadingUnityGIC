@@ -21,6 +21,14 @@ public class PoolManager : Singleton<PoolManager>
             return m_pool[i];
         }
 
+        public int IndexOf(CustomBehaviour element)
+        {
+            if (element == null || m_pool == null)
+                return -1;
+
+            return m_pool.IndexOf(element);
+        }
+
         public void Init()
         {
             AddInstances(m_cnt);

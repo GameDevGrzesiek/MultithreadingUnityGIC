@@ -68,9 +68,21 @@ public class UIManager : Singleton<UIManager>
 
     public void ChangeMobCnt(int changeAmount)
     {
-        if (changeAmount > 0)
-            JobManager.instance.AddMobsToSystem(changeAmount);
+        PoolManager.Instance.MobPool.Expand(changeAmount);
+
+        if (GameManager.Instance.SimMode == SimulationMode.Standard)
+        {
+            if (changeAmount > 0)
+                JobManager.instance.AddMobsToSystem(changeAmount);
+            else
+                JobManager.instance.RemoveMobsFromSystem(Math.Abs(changeAmount));
+        }
         else
-            JobManager.instance.RemoveMobsFromSystem(Math.Abs(changeAmount));
+        {
+            if (changeAmount > 0)
+                JobManagerExt.instance.AddMobsToSystem(changeAmount);
+            else
+                JobManagerExt.instance.RemoveMobsFromSystem(Math.Abs(changeAmount));
+        }
     }
 }

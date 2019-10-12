@@ -7,6 +7,19 @@ public enum MobState
     FromTarget
 }
 
+public enum SpearState
+{
+    Inactive,
+    Starting,
+    Active
+}
+
+public enum SimulationMode
+{
+    Standard,
+    Extended
+}
+
 public static class SettingsManager
 {
     public static float TargetSpeed = 60.0f;

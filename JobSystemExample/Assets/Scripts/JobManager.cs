@@ -149,7 +149,7 @@ public class JobManager : Singleton<JobManager>
             if (na_mobStates[i] == MobState.Throw)
             {
                 SpearBehavior spear = PoolManager.instance.SpearPool.SpawnObject(taa_mobs[i].position + SettingsManager.ThrowingPoint,
-                                                                                     Quaternion.Euler(SettingsManager.ThrowingRotation)) as SpearBehavior;
+                                                                                 Quaternion.Euler(SettingsManager.ThrowingRotation)) as SpearBehavior;
 
                 spear.Throw();
                 na_mobStates[i] = MobState.FromTarget;
@@ -201,8 +201,11 @@ public class JobManager : Singleton<JobManager>
         for (int i = oldMobCnt; i < na_mobStates.Length; ++i)
             na_mobStates[i] = MobState.ToTarget;
 
-        if (PoolManager.instance.SpearPool.m_cnt < PoolManager.instance.MobPool.m_cnt * 3)
-            AddSpearsToSystem(mobCnt * 3);
+        if (PoolManager.instance.SpearPool.m_cnt < PoolManager.instance.MobPool.m_cnt)
+        {
+            int diff = PoolManager.instance.MobPool.m_cnt - PoolManager.instance.SpearPool.m_cnt;
+            AddSpearsToSystem(diff);
+        }
     }
 
     internal void RemoveMobsFromSystem(int mobCnt)
@@ -239,7 +242,7 @@ public class JobManager : Singleton<JobManager>
 
         PoolManager.instance.MobPool.Expand(-mobCnt);
 
-        RemoveSpearsFromSystem(mobCnt * 3);
+        RemoveSpearsFromSystem(mobCnt);
     }
 
     internal void AddSpearsToSystem(int spearCnt)
